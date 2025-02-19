@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'task1/index.css' %}" />
+  </head>
+  <body>
+    <section>
+      <div class="user-profile">
+        <div class="profile-header">
+          <h1>Welcome, {{ user.get_full_name }}</h1>
+          {% if user.userprofile.profile_picture %}
+            <img src="{{ user.userprofile.profile_picture.url }}" alt="Profile Picture" class="profile-image">
+          {% endif %}
+        </div>
+        
+        <div class="profile-details">
+          <h2>Personal Information</h2>
+          <p><strong>Username:</strong> {{ user.username }}</p>
+          <p><strong>Email:</strong> {{ user.email }}</p>
+          <p><strong>User Type:</strong> {{ user.userprofile.user_type|title }}</p>
+          
+          <h2>Address Information</h2>
+          <p><strong>Address:</strong> {{ user.userprofile.address_line1 }}</p>
+          <p><strong>City:</strong> {{ user.userprofile.city }}</p>
+          <p><strong>State:</strong> {{ user.userprofile.state }}</p>
+          <p><strong>Pincode:</strong> {{ user.userprofile.pincode }}</p>
+        </div>
+      </div>
+
+      <div class="logout">
+        <button><a href="{% url 'logout' %}">Log Out</a></button>
+      </div>
+    </section>
+  </body>
+</html>
