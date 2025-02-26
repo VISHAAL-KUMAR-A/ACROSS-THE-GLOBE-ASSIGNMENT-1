@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blog</title>
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'task1/index.css' %}">
+</head>
+<body>
+  <section>
+    <div class="top-nav">
+      <button class="blog-btn"><a href="{% url 'index' %}">Back to Dashboard</a></button>
+    </div>
+
+    <div class="blog-container">
+      {% if user.userprofile.user_type == 'doctor' %}
+        <div class="blog-header">
+          <h2>My Blog Posts</h2>
+          <button id="createBlogBtn" class="create-blog-btn">Create New Blog Post</button>
+        </div>
+
+        <div id="blogForm" class="blog-form" style="display: none;">
+          <h2>Create New Blog Post</h2>
+          <form method="POST" enctype="multipart/form-data" class="animate-form">
+            {% csrf_token %}
+            <div class="form-group slide-in">
+              <label for="title">Title:</label>
+              <input type="text" id="title" name="title" required>
+            </div>
+            
+            <div class="form-group slide-in">
+              <label for="image">Image:</label>
+              <input type="file" id="image" name="image" accept="image/*" required>
+            </div>
+            
+            <div class="form-group slide-in">
+              <label for="category">Category:</label>
+              <select id="category" name="category" required>
+                {% for code, name in categories %}
+                  <option value="{{ code }}">{{ name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            
+            <div class="form-group slide-in">
+              <label for="summary">Summary (Brief overview):</label>
+              <textarea id="summary" name="summary" required 
+                        placeholder="Write a brief summary of your post (will be truncated to 15 words in listings)"></textarea>
+            </div>
+            
+            <div class="form-group slide-in">
+              <label for="content">Content:</label>
+              <textarea id="content" name="content" required></textarea>
+            </div>
+            
+            <div class="form-group slide-in">
+              <label class="draft-label">
+                <input type="checkbox" name="is_draft">
+                Save as Draft
+              </label>
+            </div>
+            
+            <button type="submit" class="submit-btn slide-in">Create Post</button>
+          </form>
+        </div>
+      {% endif %}
+
+      <div class="blog-posts">
+        {% for post in posts %}
+          <div class="blog-post fade-in">
+            <a href="{% url 'blog_detail' post.id %}" class="blog-post-link">
+              <h3>{{ post.title }}</h3>
+              <img src="{{ post.image.url }}" alt="{{ post.title }}">
+              <p class="category">Category: {{ post.get_category_display }}</p>
+              <p class="summary">{{ post.summary|truncatewords:15 }}</p>
+              <p class="status">Status: {% if post.is_draft %}Draft{% else %}Published{% endif %}</p>
+              <p class="date">Created: {{ post.created_at|date:"F j, Y" }}</p>
+            </a>
+          </div>
+        {% empty %}
+          <p class="no-posts">No blog posts yet.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="logout">
+      <button><a href="{% url 'logout' %}">Log Out</a></button>
+    </div>
+  </section>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const createBlogBtn = document.getElementById('createBlogBtn');
+      const blogForm = document.getElementById('blogForm');
+
+      if (createBlogBtn) {
+        createBlogBtn.addEventListener('click', function() {
+          blogForm.style.display = blogForm.style.display === 'none' ? 'block' : 'none';
+          if (blogForm.style.display === 'block') {
+            blogForm.scrollIntoView({ behavior: 'smooth' });
+          }
+        });
+      }
+    });
+  </script>
+</body>
+</html>

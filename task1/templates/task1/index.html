@@ -9,6 +9,14 @@
   </head>
   <body>
     <section>
+      <div class="top-nav">
+        {% if user.userprofile.user_type == 'doctor' %}
+          <button class="blog-btn"><a href="{% url 'my_blog' %}">My Blog</a></button>
+        {% else %}
+          <button class="blog-btn"><a href="{% url 'all_posts' %}">All Posts</a></button>
+        {% endif %}
+      </div>
+
       <div class="user-profile">
         <div class="profile-header">
           <h1>Welcome, {{ user.get_full_name }}</h1>

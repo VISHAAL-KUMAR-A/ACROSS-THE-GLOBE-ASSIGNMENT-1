@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ post.title }}</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'task1/index.css' %}">
+</head>
+<body>
+    <section>
+        <div class="top-nav">
+            {% if user.userprofile.user_type == 'doctor' %}
+                <button class="blog-btn"><a href="{% url 'my_blog' %}">Back to My Blogs</a></button>
+            {% else %}
+                <button class="blog-btn"><a href="{% url 'all_posts' %}">Back to All Posts</a></button>
+            {% endif %}
+        </div>
+
+        <div class="blog-detail-container">
+            <article class="blog-detail">
+                <header class="blog-detail-header">
+                    <h1>{{ post.title }}</h1>
+                    <div class="blog-meta">
+                        <span class="category">{{ post.get_category_display }}</span>
+                        <span class="author">By Dr. {{ post.doctor.user_profile.user.get_full_name }}</span>
+                        <span class="date">{{ post.created_at|date:"F j, Y" }}</span>
+                        {% if post.is_draft %}
+                            <span class="draft-badge">Draft</span>
+                            {% if user.userprofile.user_type == 'doctor' and post.doctor.user_profile.user == user %}
+                                <a href="{% url 'edit_blog' post.id %}" class="edit-btn">Edit Post</a>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </header>
+
+                <div class="blog-detail-image">
+                    <img src="{{ post.image.url }}" alt="{{ post.title }}">
+                </div>
+
+                <div class="blog-detail-content">
+                    <div class="summary">
+                        <h3>Summary</h3>
+                        <p>{{ post.summary }}</p>
+                    </div>
+
+                    <div class="content">
+                        <h3>Content</h3>
+                        {{ post.content|linebreaks }}
+                    </div>
+                </div>
+            </article>
+        </div>
+
+        <div class="logout">
+            <button><a href="{% url 'logout' %}">Log Out</a></button>
+        </div>
+    </section>
+</body>
+</html> 

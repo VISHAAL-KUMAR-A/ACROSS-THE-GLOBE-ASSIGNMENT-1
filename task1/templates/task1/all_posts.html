@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>All Blog Posts</title>
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'task1/index.css' %}">
+</head>
+<body>
+  <section>
+    <div class="top-nav">
+      <button class="blog-btn"><a href="{% url 'index' %}">Back to Dashboard</a></button>
+    </div>
+
+    <div class="blog-container">
+      <h2>All Blog Posts</h2>
+      
+      <div class="category-filter">
+        <a href="{% url 'all_posts' %}" {% if not selected_category %}class="active"{% endif %}>All</a>
+        {% for code, name in categories %}
+          <a href="{% url 'all_posts' %}?category={{ code }}" 
+             {% if selected_category == code %}class="active"{% endif %}>
+            {{ name }}
+          </a>
+        {% endfor %}
+      </div>
+
+      <div class="blog-posts">
+        {% for post in posts %}
+          <div class="blog-post">
+            <a href="{% url 'blog_detail' post.id %}" class="blog-post-link">
+              <h3>{{ post.title }}</h3>
+              <img src="{{ post.image.url }}" alt="{{ post.title }}">
+              <p class="category">Category: {{ post.get_category_display }}</p>
+              <p class="summary">{{ post.summary|truncatewords:15 }}</p>
+              <p class="author">By Dr. {{ post.doctor.user_profile.user.get_full_name }}</p>
+              <p class="date">Posted on: {{ post.created_at|date:"F j, Y" }}</p>
+            </a>
+          </div>
+        {% empty %}
+          <p class="no-posts">No blog posts available.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="logout">
+      <button><a href="{% url 'logout' %}">Log Out</a></button>
+    </div>
+  </section>
+</body>
+</html>
