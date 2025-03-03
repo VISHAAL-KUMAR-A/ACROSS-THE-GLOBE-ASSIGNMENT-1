@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from datetime import datetime, timedelta
 
 # Create your models here.
 
@@ -57,3 +58,35 @@ class BlogPost(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class Appointment(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('confirmed', 'Confirmed'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled')
+    ]
+
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE)
+    speciality = models.CharField(max_length=50)
+    appointment_date = models.DateField()
+    appointment_time = models.TimeField()
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    calendar_event_id = models.CharField(max_length=255, blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.patient.user_profile.user.get_full_name()} with Dr. {self.doctor.user_profile.user.get_full_name()} on {self.appointment_date}"
+
+    @property
+    def end_time(self):
+        """Calculate the end time (45 minutes after start time)"""
+        start_datetime = datetime.combine(
+            self.appointment_date,
+            self.appointment_time
+        )
+        end_datetime = start_datetime + timedelta(minutes=45)
+        return end_datetime.time()

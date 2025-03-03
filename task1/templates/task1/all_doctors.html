@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>All Doctors</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'task1/index.css' %}" />
+  </head>
+  <body>
+    <section>
+      <div class="top-nav">
+        <button class="blog-btn"><a href="{% url 'index' %}">Dashboard</a></button>
+        <button class="blog-btn"><a href="{% url 'all_posts' %}">All Posts</a></button>
+      </div>
+
+      <h1 class="blog-header">All Doctors</h1>
+
+      <div class="doctors-container">
+        {% if doctors %}
+          <div class="doctors-list">
+            {% for doctor in doctors %}
+              <div class="doctor-card slide-in">
+                {% if doctor.user_profile.profile_picture %}
+                  <img src="{{ doctor.user_profile.profile_picture.url }}" alt="Doctor Profile Picture" class="doctor-image">
+                {% endif %}
+                <div class="doctor-info">
+                  <h2>{{ doctor.user_profile.user.get_full_name }}</h2>
+                  <button class="book-appointment-btn" onclick="openAppointmentModal('{{ doctor.id }}', '{{ doctor.user_profile.user.get_full_name }}')">Book Appointment</button>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="no-posts">
+            <h2>No doctors found in the system.</h2>
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Appointment Modal -->
+      <div id="appointmentModal" class="modal">
+        <div class="modal-content">
+          <span class="close-modal" onclick="closeAppointmentModal()">&times;</span>
+          <h2>Book Appointment with <span id="doctorName"></span></h2>
+          <form id="appointmentForm" method="post" action="{% url 'book_appointment' %}">
+            {% csrf_token %}
+            <input type="hidden" id="doctorId" name="doctor_id">
+            
+            <div class="form-group">
+              <label for="speciality">Required Speciality:</label>
+              <select id="speciality" name="speciality" required>
+                <option value="">Select Speciality</option>
+                <option value="general">General</option>
+                <option value="cardiology">Cardiology</option>
+                <option value="dermatology">Dermatology</option>
+                <option value="neurology">Neurology</option>
+                <option value="orthopedics">Orthopedics</option>
+                <option value="pediatrics">Pediatrics</option>
+                <option value="psychiatry">Psychiatry</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="appointment_date">Date of Appointment:</label>
+              <input type="date" id="appointment_date" name="appointment_date" required min="{{ today_date|date:'Y-m-d' }}">
+            </div>
+            
+            <div class="form-group">
+              <label for="appointment_time">Start Time of Appointment:</label>
+              <input type="time" id="appointment_time" name="appointment_time" required min="09:00" max="17:00">
+              <small>Available hours: 9:00 AM - 5:00 PM (Each appointment is 45 minutes)</small>
+            </div>
+            
+            <button type="submit" class="confirm-appointment-btn">Confirm Appointment</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="logout">
+        <button><a href="{% url 'logout' %}">Log Out</a></button>
+      </div>
+    </section>
+
+    <script>
+      function openAppointmentModal(doctorId, doctorName) {
+        document.getElementById('appointmentModal').style.display = 'block';
+        document.getElementById('doctorId').value = doctorId;
+        document.getElementById('doctorName').textContent = doctorName;
+        
+        // Set minimum date to today
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        const formattedDate = `${yyyy}-${mm}-${dd}`;
+        document.getElementById('appointment_date').min = formattedDate;
+        
+        // Set max time to 16:15 (4:15 PM) to ensure 45-minute appointments end by 5 PM
+        document.getElementById('appointment_time').max = "16:15";
+      }
+      
+      function closeAppointmentModal() {
+        document.getElementById('appointmentModal').style.display = 'none';
+      }
+      
+      // Close modal when clicking outside of it
+      window.onclick = function(event) {
+        const modal = document.getElementById('appointmentModal');
+        if (event.target == modal) {
+          closeAppointmentModal();
+        }
+      }
+    </script>
+  </body>
+</html> 

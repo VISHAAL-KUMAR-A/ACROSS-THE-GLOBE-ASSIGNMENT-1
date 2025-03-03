@@ -12,8 +12,11 @@
       <div class="top-nav">
         {% if user.userprofile.user_type == 'doctor' %}
           <button class="blog-btn"><a href="{% url 'my_blog' %}">My Blog</a></button>
+          <button class="blog-btn"><a href="{% url 'doctor_appointments' %}">My Appointments</a></button>
         {% else %}
           <button class="blog-btn"><a href="{% url 'all_posts' %}">All Posts</a></button>
+          <button class="blog-btn"><a href="{% url 'all_doctors' %}">All Doctors</a></button>
+          <button class="blog-btn"><a href="{% url 'my_appointments' %}">My Appointments</a></button>
         {% endif %}
       </div>
 

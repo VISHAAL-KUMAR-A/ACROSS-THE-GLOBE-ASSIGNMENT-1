@@ -3,7 +3,19 @@ from django.contrib.auth import login, authenticate
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib import messages
-from .models import UserProfile, Patient, Doctor, BlogPost
+from .models import UserProfile, Patient, Doctor, BlogPost, Appointment
+from django.utils import timezone
+from datetime import datetime, timedelta
+import json
+from django.http import JsonResponse
+from django.db.models import Q
+from django.conf import settings
+import os
+import google.oauth2.credentials
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 
 # Create your views here.
 
@@ -155,3 +167,282 @@ def edit_blog(request, post_id):
         'post': post,
         'categories': BlogPost.CATEGORIES
     })
+
+
+@login_required
+def all_doctors(request):
+    if request.user.userprofile.user_type != 'patient':
+        return redirect('index')
+
+    doctors = Doctor.objects.all()
+    context = {
+        'doctors': doctors,
+        'today_date': timezone.now().date()
+    }
+    return render(request, 'task1/all_doctors.html', context)
+
+
+@login_required
+def book_appointment(request):
+    if request.method == 'POST' and request.user.userprofile.user_type == 'patient':
+        doctor_id = request.POST.get('doctor_id')
+        speciality = request.POST.get('speciality')
+        appointment_date = request.POST.get('appointment_date')
+        appointment_time = request.POST.get('appointment_time')
+
+        try:
+            doctor = Doctor.objects.get(id=doctor_id)
+            patient = Patient.objects.get(
+                user_profile=request.user.userprofile)
+
+            # Parse date and time
+            date_obj = datetime.strptime(appointment_date, '%Y-%m-%d').date()
+            time_obj = datetime.strptime(appointment_time, '%H:%M').time()
+
+            # Calculate end time (45 minutes later)
+            start_datetime = datetime.combine(date_obj, time_obj)
+            end_datetime = start_datetime + timedelta(minutes=45)
+            end_time = end_datetime.time()
+
+            # Check for overlapping appointments for the doctor
+            doctor_appointments = Appointment.objects.filter(
+                doctor=doctor,
+                appointment_date=date_obj,
+                status__in=['pending', 'confirmed']
+            )
+
+            for existing_appt in doctor_appointments:
+                existing_start = datetime.combine(
+                    existing_appt.appointment_date, existing_appt.appointment_time)
+                existing_end = existing_start + timedelta(minutes=45)
+
+                # Check if new appointment overlaps with existing one
+                if (start_datetime < existing_end and end_datetime > existing_start):
+                    messages.error(
+                        request, 'This time slot is already booked. Please select a different time.')
+                    return redirect('all_doctors')
+
+            # Create appointment
+            appointment = Appointment.objects.create(
+                doctor=doctor,
+                patient=patient,
+                speciality=speciality,
+                appointment_date=date_obj,
+                appointment_time=time_obj,
+                status='pending'
+            )
+
+            # Create Google Calendar event
+            try:
+                create_calendar_event(
+                    doctor=doctor,
+                    patient=patient,
+                    appointment=appointment,
+                    start_datetime=start_datetime,
+                    end_datetime=end_datetime
+                )
+                messages.success(
+                    request, 'Appointment booked successfully and added to doctor\'s calendar!')
+            except Exception as e:
+                messages.warning(
+                    request, f'Appointment booked but calendar event creation failed: {str(e)}')
+
+            return redirect('my_appointments')
+
+        except Exception as e:
+            messages.error(request, f'Error booking appointment: {str(e)}')
+            return redirect('all_doctors')
+
+    return redirect('all_doctors')
+
+
+def create_calendar_event(doctor, patient, appointment, start_datetime, end_datetime):
+    """Create a Google Calendar event for the doctor"""
+
+    # Load credentials from the saved file
+    creds = None
+    token_path = os.path.join(settings.BASE_DIR, 'task1', 'google_token.json')
+
+    if os.path.exists(token_path):
+        creds = Credentials.from_authorized_user_info(
+            json.load(open(token_path)),
+            ['https://www.googleapis.com/auth/calendar']
+        )
+
+    # If there are no valid credentials, we need to authenticate
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            # For simplicity, we'll use a service account or pre-authenticated token
+            # In a real app, you'd implement OAuth2 flow for the doctor
+            raise Exception(
+                "Calendar credentials not available. Please authenticate first.")
+
+    # Build the service
+    service = build('calendar', 'v3', credentials=creds)
+
+    # Format the event
+    patient_name = patient.user_profile.user.get_full_name()
+    doctor_name = doctor.user_profile.user.get_full_name()
+
+    event = {
+        'summary': f'Appointment with {patient_name}',
+        'location': 'Virtual Consultation',
+        'description': f'Appointment for {speciality} consultation with {patient_name}. Duration: 45 minutes.',
+        'start': {
+            'dateTime': start_datetime.isoformat(),
+            'timeZone': 'Asia/Kolkata',  # Adjust for your timezone
+        },
+        'end': {
+            'dateTime': end_datetime.isoformat(),
+            'timeZone': 'Asia/Kolkata',  # Adjust for your timezone
+        },
+        'reminders': {
+            'useDefault': False,
+            'overrides': [
+                {'method': 'email', 'minutes': 24 * 60},
+                {'method': 'popup', 'minutes': 30},
+            ],
+        },
+    }
+
+    # Insert the event
+    event = service.events().insert(calendarId='primary', body=event).execute()
+
+    # Save the event ID to the appointment for future reference
+    appointment.calendar_event_id = event.get('id')
+    appointment.save()
+
+    return event.get('id')
+
+
+@login_required
+def my_appointments(request):
+    if request.user.userprofile.user_type != 'patient':
+        return redirect('index')
+
+    patient = Patient.objects.get(user_profile=request.user.userprofile)
+    appointments = Appointment.objects.filter(patient=patient).order_by(
+        'appointment_date', 'appointment_time')
+
+    return render(request, 'task1/my_appointments.html', {'appointments': appointments})
+
+
+@login_required
+def cancel_appointment(request, appointment_id):
+    try:
+        appointment = Appointment.objects.get(id=appointment_id)
+
+        # Check if the appointment belongs to the current user
+        if appointment.patient.user_profile.user != request.user:
+            messages.error(
+                request, "You don't have permission to cancel this appointment.")
+            return redirect('my_appointments')
+
+        # Check if the appointment is pending
+        if appointment.status != 'pending':
+            messages.error(
+                request, "Only pending appointments can be cancelled.")
+            return redirect('my_appointments')
+
+        # Delete the Google Calendar event if it exists
+        if appointment.calendar_event_id:
+            try:
+                from .google_calendar import get_calendar_service
+                service = get_calendar_service()
+                service.events().delete(
+                    calendarId='primary',
+                    eventId=appointment.calendar_event_id
+                ).execute()
+            except Exception as e:
+                messages.warning(
+                    request, f"Could not delete calendar event: {str(e)}")
+
+        appointment.status = 'cancelled'
+        appointment.save()
+        messages.success(request, "Appointment cancelled successfully.")
+
+    except Appointment.DoesNotExist:
+        messages.error(request, "Appointment not found.")
+
+    return redirect('my_appointments')
+
+
+@login_required
+def doctor_appointments(request):
+    if request.user.userprofile.user_type != 'doctor':
+        return redirect('index')
+
+    doctor = Doctor.objects.get(user_profile=request.user.userprofile)
+    appointments = Appointment.objects.filter(doctor=doctor).order_by(
+        'appointment_date', 'appointment_time')
+
+    return render(request, 'task1/doctor_appointments.html', {'appointments': appointments})
+
+
+@login_required
+def confirm_appointment(request, appointment_id):
+    try:
+        appointment = Appointment.objects.get(id=appointment_id)
+
+        # Check if the appointment belongs to the current doctor
+        if appointment.doctor.user_profile.user != request.user:
+            messages.error(
+                request, "You don't have permission to confirm this appointment.")
+            return redirect('doctor_appointments')
+
+        # Check if the appointment is pending
+        if appointment.status != 'pending':
+            messages.error(
+                request, "Only pending appointments can be confirmed.")
+            return redirect('doctor_appointments')
+
+        appointment.status = 'confirmed'
+        appointment.save()
+        messages.success(request, "Appointment confirmed successfully.")
+
+    except Appointment.DoesNotExist:
+        messages.error(request, "Appointment not found.")
+
+    return redirect('doctor_appointments')
+
+
+@login_required
+def reject_appointment(request, appointment_id):
+    try:
+        appointment = Appointment.objects.get(id=appointment_id)
+
+        # Check if the appointment belongs to the current doctor
+        if appointment.doctor.user_profile.user != request.user:
+            messages.error(
+                request, "You don't have permission to reject this appointment.")
+            return redirect('doctor_appointments')
+
+        # Check if the appointment is pending
+        if appointment.status != 'pending':
+            messages.error(
+                request, "Only pending appointments can be rejected.")
+            return redirect('doctor_appointments')
+
+        # Delete the Google Calendar event if it exists
+        if appointment.calendar_event_id:
+            try:
+                from .google_calendar import get_calendar_service
+                service = get_calendar_service()
+                service.events().delete(
+                    calendarId='primary',
+                    eventId=appointment.calendar_event_id
+                ).execute()
+            except Exception as e:
+                messages.warning(
+                    request, f"Could not delete calendar event: {str(e)}")
+
+        appointment.status = 'cancelled'
+        appointment.save()
+        messages.success(request, "Appointment rejected successfully.")
+
+    except Appointment.DoesNotExist:
+        messages.error(request, "Appointment not found.")
+
+    return redirect('doctor_appointments')
